@@ -1,0 +1,12 @@
+# Netlify 배포 설정: 빌드 명령과 결과 폴더, SPA 새로고침 대응 리다이렉트
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
