@@ -1,80 +1,90 @@
-// 홈 화면: 사이트 소개 + 최근 연구 3건 + 최근 수업 자료 3건
-import { useEffect, useState } from 'react';
+// 홈: 연구실 소개 + 최근 연구·수업 자료·토론 각 3건
+import { useCallback, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import MaterialItem from '../components/MaterialItem';
-import { Message } from '../components/Message';
+import MaterialCard from '../components/MaterialCard';
+import PostListItem from '../components/PostListItem';
 import ResearchCard from '../components/ResearchCard';
-import { dataService } from '../services/dataService';
-import type { Material, Research } from '../services/types';
+import { EmptyState, ErrorMessage, Loading } from '../components/StatusMessage';
+import lab from '../data/lab.json';
+import { useAsync } from '../hooks/useAsync';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { discussionService, materialService, researchService } from '../services';
+
+const RECENT_COUNT = 3;
 
 export default function HomePage() {
-  const [researches, setResearches] = useState<Research[] | null>(null);
-  const [materials, setMaterials] = useState<Material[] | null>(null);
-
-  useEffect(() => {
-    // 최근 3건만 요청 (Firestore 전환 시 orderBy + limit 쿼리로 대응)
-    void dataService.listResearches({ limit: 3 }).then(setResearches);
-    void dataService.listMaterials({ limit: 3 }).then(setMaterials);
-  }, []);
+  useDocumentTitle();
+  // 필요한 개수(3건)만 요청해, 2차에서 Firestore 읽기 횟수를 최소화
+  const research = useAsync(useCallback(() => researchService.list({ limit: RECENT_COUNT }), []));
+  const materials = useAsync(useCallback(() => materialService.list({ limit: RECENT_COUNT }), []));
+  const posts = useAsync(useCallback(() => discussionService.listPosts({ limit: RECENT_COUNT }), []));
 
   return (
-    <div className="space-y-10">
-      <section className="card p-6 sm:p-8">
-        <h1 className="mb-3 text-2xl font-bold text-brand-800 sm:text-3xl">간호학 연구·교육 아카이브</h1>
-        <p className="max-w-2xl text-slate-600">
-          유전간호, 종양간호, 다학제 교육(IPE), 시뮬레이션 교육 분야의 연구 진행 현황과 수업 자료를 모아 두고,
-          대학원생과 함께 연구에 관해 토론하는 연구실 내부 공간입니다.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Link to="/research" className="btn-primary">
-            연구 둘러보기
+    <div className="flex flex-col gap-14">
+      <section className="rounded-2xl bg-gradient-to-br from-brand-800 to-brand-900 px-6 py-10 text-white sm:px-10 sm:py-14">
+        <p className="text-sm font-medium text-accent-100">{lab.name}</p>
+        <h1 className="mt-2 text-2xl font-bold leading-snug sm:text-3xl">{lab.tagline}</h1>
+        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-brand-100 sm:text-base">{lab.intro}</p>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link to="/research" className="btn bg-white text-brand-800 hover:bg-brand-50">
+            연구 보기
           </Link>
-          <Link to="/teaching" className="btn-secondary">
-            수업 자료 보기
+          <Link to="/discussions" className="btn border border-white/40 text-white hover:bg-white/10">
+            토론 참여하기
           </Link>
         </div>
       </section>
 
-      <section>
-        <SectionHeader title="최근 연구" to="/research" />
-        {researches === null ? (
-          <Message>불러오는 중…</Message>
-        ) : researches.length === 0 ? (
-          <Message>등록된 연구가 없습니다.</Message>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {researches.map((r) => (
+      <HomeSection title="최근 연구" moreTo="/research">
+        {research.loading && <Loading />}
+        {research.error && <ErrorMessage message={research.error} />}
+        {research.data && (
+          <div className="grid gap-4 md:grid-cols-3">
+            {research.data.map((r) => (
               <ResearchCard key={r.id} research={r} />
             ))}
           </div>
         )}
-      </section>
+      </HomeSection>
 
-      <section>
-        <SectionHeader title="최근 수업 자료" to="/teaching" />
-        {materials === null ? (
-          <Message>불러오는 중…</Message>
-        ) : materials.length === 0 ? (
-          <Message>등록된 수업 자료가 없습니다.</Message>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {materials.map((m) => (
-              <MaterialItem key={m.id} material={m} />
+      <HomeSection title="최근 수업 자료" moreTo="/materials">
+        {materials.loading && <Loading />}
+        {materials.error && <ErrorMessage message={materials.error} />}
+        {materials.data && (
+          <div className="grid gap-4 md:grid-cols-3">
+            {materials.data.map((m) => (
+              <MaterialCard key={m.id} material={m} />
             ))}
           </div>
         )}
-      </section>
+      </HomeSection>
+
+      <HomeSection title="최근 토론" moreTo="/discussions">
+        {posts.loading && <Loading />}
+        {posts.error && <ErrorMessage message={posts.error} />}
+        {posts.data && posts.data.items.length === 0 && <EmptyState>아직 토론 글이 없습니다.</EmptyState>}
+        {posts.data && posts.data.items.length > 0 && (
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white px-5">
+            {posts.data.items.map((p) => (
+              <PostListItem key={p.id} post={p} />
+            ))}
+          </ul>
+        )}
+      </HomeSection>
     </div>
   );
 }
 
-function SectionHeader({ title, to }: { title: string; to: string }) {
+function HomeSection({ title, moreTo, children }: { title: string; moreTo: string; children: ReactNode }) {
   return (
-    <div className="mb-3 flex items-end justify-between">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <Link to={to} className="text-sm text-brand-700 hover:underline">
-        전체 보기 →
-      </Link>
-    </div>
+    <section aria-label={title}>
+      <div className="mb-4 flex items-end justify-between">
+        <h2 className="text-xl font-bold text-brand-900">{title}</h2>
+        <Link to={moreTo} className="link text-sm">
+          전체 보기<span className="sr-only"> ({title})</span> →
+        </Link>
+      </div>
+      {children}
+    </section>
   );
 }

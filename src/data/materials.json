@@ -1,0 +1,54 @@
+[
+  {
+    "id": "genetics-week3-inheritance",
+    "title": "3주차: 멘델 유전과 가계도 작성",
+    "description": "단일유전자 질환의 유전 양식과 3세대 가계도 작성법을 다룹니다. 실습용 가계도 사례 포함.",
+    "course": "유전간호",
+    "links": [
+      { "label": "강의 슬라이드 (예시 링크)", "url": "https://example.com/materials/genetics-w3-slides" },
+      { "label": "가계도 실습지 (예시 링크)", "url": "https://example.com/materials/genetics-w3-worksheet" }
+    ],
+    "createdAt": "2026-09-15T00:00:00.000Z"
+  },
+  {
+    "id": "genetics-week7-pharmacogenomics",
+    "title": "7주차: 약물유전체학과 간호",
+    "description": "CYP2D6, DPYD 등 대표 약물유전체 변이와 항암제 독성, 간호사의 역할을 사례 중심으로 학습합니다.",
+    "course": "유전간호",
+    "links": [
+      { "label": "강의 슬라이드 (예시 링크)", "url": "https://example.com/materials/genetics-w7-slides" }
+    ],
+    "createdAt": "2026-10-13T00:00:00.000Z"
+  },
+  {
+    "id": "pharm-anticoagulants",
+    "title": "항응고제의 작용기전과 투약 간호",
+    "description": "헤파린, 와파린, DOAC 의 작용기전·모니터링 지표(aPTT, INR)·출혈 위험 사정과 환자 교육을 정리했습니다.",
+    "course": "약리학",
+    "links": [
+      { "label": "강의 노트 (예시 링크)", "url": "https://example.com/materials/pharm-anticoagulants" }
+    ],
+    "createdAt": "2026-10-06T00:00:00.000Z"
+  },
+  {
+    "id": "pharm-chemotherapy-safety",
+    "title": "세포독성 항암제 안전 취급과 일혈 관리",
+    "description": "세포독성 약물 노출 예방(PPE), 일혈(extravasation) 발생 시 대처 절차와 관련 지침을 다룹니다.",
+    "course": "약리학",
+    "links": [
+      { "label": "강의 슬라이드 (예시 링크)", "url": "https://example.com/materials/pharm-chemo-safety" },
+      { "label": "일혈 관리 체크리스트 (예시 링크)", "url": "https://example.com/materials/pharm-extravasation" }
+    ],
+    "createdAt": "2026-09-29T00:00:00.000Z"
+  },
+  {
+    "id": "ipe-sbar-simulation",
+    "title": "IPE 시뮬레이션: SBAR 기반 급성 악화 환자 보고",
+    "description": "간호·의학 학생 합동 시뮬레이션 사전학습 자료입니다. 시나리오 개요, 역할 카드, 디브리핑 질문을 포함합니다.",
+    "course": "IPE",
+    "links": [
+      { "label": "사전학습 자료 (예시 링크)", "url": "https://example.com/materials/ipe-sbar-prebrief" }
+    ],
+    "createdAt": "2026-10-20T00:00:00.000Z"
+  }
+]

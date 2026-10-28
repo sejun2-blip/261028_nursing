@@ -1,26 +1,26 @@
-// 연구 목록·홈 화면에서 쓰는 연구 카드
+// 연구 목록에 쓰이는 카드
 import { Link } from 'react-router-dom';
-import { formatDate } from '../lib/date';
-import type { Research } from '../services/types';
-import { StatusBadge, TagBadge } from './Badges';
+import type { Research } from '../types';
+import StatusBadge from './StatusBadge';
+import TagList from './TagList';
 
 export default function ResearchCard({ research }: { research: Research }) {
   return (
-    <Link
-      to={`/research/${research.id}`}
-      className="card flex h-full flex-col p-4 transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-600"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <article className="card flex h-full flex-col gap-3 transition-shadow hover:shadow-sm">
+      <div className="flex items-center gap-2 text-sm text-slate-500">
         <StatusBadge status={research.status} />
-        <span className="text-xs text-slate-500">{formatDate(research.createdAt)}</span>
+        <span>{research.year}년</span>
       </div>
-      <h3 className="mb-2 font-semibold leading-snug text-slate-900">{research.title}</h3>
-      <p className="mb-3 line-clamp-3 flex-1 text-sm text-slate-600">{research.summary}</p>
-      <div className="flex flex-wrap gap-1">
-        {research.tags.map((tag) => (
-          <TagBadge key={tag} tag={tag} />
-        ))}
+      <h3 className="text-lg font-semibold leading-snug text-brand-900">
+        {/* 카드 전체가 아니라 제목을 링크로 두어, 화면낭독기에서 링크 문구가 명확하게 읽히도록 함 */}
+        <Link to={`/research/${research.id}`} className="hover:text-accent-700 hover:underline">
+          {research.title}
+        </Link>
+      </h3>
+      <p className="line-clamp-3 text-sm text-slate-600">{research.summary}</p>
+      <div className="mt-auto pt-1">
+        <TagList tags={research.tags} />
       </div>
-    </Link>
+    </article>
   );
 }

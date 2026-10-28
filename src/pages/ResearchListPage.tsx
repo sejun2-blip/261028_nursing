@@ -1,97 +1,58 @@
-// 연구 목록 화면: 카드형 목록 + 태그 필터 + 제목 검색 (필터 상태는 주소창 ?tag=&q= 에 저장)
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Message } from '../components/Message';
+// 연구 목록: 상태(진행중/완료) 필터 + 카드 목록
+import { useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import ResearchCard from '../components/ResearchCard';
-import { useAuth } from '../context/AuthContext';
-import { dataService } from '../services/dataService';
-import { RESEARCH_TAGS, type Research } from '../services/types';
+import { EmptyState, ErrorMessage, Loading } from '../components/StatusMessage';
+import { useAsync } from '../hooks/useAsync';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { researchService } from '../services';
+import type { ResearchStatus } from '../types';
+
+const STATUS_FILTERS: { value: ResearchStatus | 'all'; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'ongoing', label: '진행중' },
+  { value: 'completed', label: '완료' },
+];
 
 export default function ResearchListPage() {
-  const { isAdmin } = useAuth();
+  useDocumentTitle('연구');
+  // 선택한 필터를 주소(?status=)에 남겨, 새로고침하거나 링크를 공유해도 유지되게 함
   const [params, setParams] = useSearchParams();
-  const tag = params.get('tag') ?? '';
-  const search = params.get('q') ?? '';
-  const [researches, setResearches] = useState<Research[] | null>(null);
+  const status = params.get('status') ?? 'all';
+  const { data, loading, error } = useAsync(useCallback(() => researchService.list(), []));
 
-  useEffect(() => {
-    let active = true;
-    dataService.listResearches({ tag: tag || undefined, search }).then((list) => {
-      if (active) setResearches(list);
-    });
-    return () => {
-      active = false;
-    };
-  }, [tag, search]);
-
-  function updateParam(key: 'tag' | 'q', value: string) {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setParams(next, { replace: true });
-  }
-
-  return (
-    <div>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">연구</h1>
-        {isAdmin && (
-          <Link to="/research/new" className="btn-primary">
-            + 연구 추가
-          </Link>
-        )}
-      </div>
-
-      <div className="card mb-5 space-y-3 p-4">
-        <label htmlFor="research-search" className="sr-only">
-          제목 검색
-        </label>
-        <input
-          id="research-search"
-          type="search"
-          className="input"
-          placeholder="연구 제목으로 검색"
-          value={search}
-          onChange={(e) => updateParam('q', e.target.value)}
-        />
-        <div className="flex flex-wrap gap-2" role="group" aria-label="태그 필터">
-          <FilterChip active={!tag} onClick={() => updateParam('tag', '')}>
-            전체
-          </FilterChip>
-          {RESEARCH_TAGS.map((t) => (
-            <FilterChip key={t} active={tag === t} onClick={() => updateParam('tag', tag === t ? '' : t)}>
-              #{t}
-            </FilterChip>
-          ))}
-        </div>
-      </div>
-
-      {researches === null ? (
-        <Message>불러오는 중…</Message>
-      ) : researches.length === 0 ? (
-        <Message>조건에 맞는 연구가 없습니다.</Message>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {researches.map((r) => (
-            <ResearchCard key={r.id} research={r} />
-          ))}
-        </div>
-      )}
-    </div>
+  const filtered = useMemo(
+    () => (data ?? []).filter((r) => status === 'all' || r.status === status),
+    [data, status],
   );
-}
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string | string[] }) {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        active ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'
-      }`}
-    >
-      {children}
-    </button>
+    <>
+      <PageHeader title="연구" description="연구실에서 수행 중이거나 완료한 연구를 소개합니다." />
+
+      <div role="group" aria-label="연구 상태 필터" className="mb-6 flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            aria-pressed={status === f.value}
+            onClick={() => setParams(f.value === 'all' ? {} : { status: f.value })}
+            className={status === f.value ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <Loading />}
+      {error && <ErrorMessage message={error} />}
+      {data && filtered.length === 0 && <EmptyState>해당하는 연구가 없습니다.</EmptyState>}
+      <div className="grid gap-4 md:grid-cols-2">
+        {filtered.map((r) => (
+          <ResearchCard key={r.id} research={r} />
+        ))}
+      </div>
+    </>
   );
 }

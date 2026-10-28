@@ -1,89 +1,88 @@
-// 연구 상세 화면: 제목·요약·태그·상태·작성일, 자료 링크, 토론(댓글) 영역
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { StatusBadge, TagBadge } from '../components/Badges';
-import CommentSection from '../components/CommentSection';
+// 연구 상세: 초록, 방법, 결과 요약, 관련 자료 링크, 이 연구에 대한 토론
+import { useCallback, type ReactNode } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import LinkList from '../components/LinkList';
-import { Message } from '../components/Message';
-import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../lib/date';
-import { dataService } from '../services/dataService';
-import type { Research } from '../services/types';
+import PostListItem from '../components/PostListItem';
+import StatusBadge from '../components/StatusBadge';
+import { ErrorMessage, Loading } from '../components/StatusMessage';
+import TagList from '../components/TagList';
+import { useAsync } from '../hooks/useAsync';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { usePermissions } from '../hooks/usePermissions';
+import { discussionService, researchService } from '../services';
+import NotFoundPage from './NotFoundPage';
 
 export default function ResearchDetailPage() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
-  const { isAdmin } = useAuth();
-  // undefined = 불러오는 중, null = 없음
-  const [research, setResearch] = useState<Research | null | undefined>(undefined);
+  const { canWrite } = usePermissions();
+  const research = useAsync(useCallback(() => researchService.getById(id), [id]));
+  const posts = useAsync(useCallback(() => discussionService.listPosts({ researchId: id, limit: 5 }), [id]));
+  useDocumentTitle(research.data?.title ?? '연구');
 
-  useEffect(() => {
-    let active = true;
-    setResearch(undefined);
-    dataService.getResearch(id).then((r) => {
-      if (active) setResearch(r);
-    });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  async function handleDelete() {
-    if (!research || !window.confirm(`"${research.title}" 연구를 삭제할까요? 댓글도 함께 삭제됩니다.`)) return;
-    await dataService.deleteResearch(research.id);
-    navigate('/research', { replace: true });
-  }
-
-  if (research === undefined) return <Message>불러오는 중…</Message>;
-  if (research === null) {
-    return (
-      <Message>
-        연구를 찾을 수 없습니다.{' '}
-        <Link to="/research" className="text-brand-700 underline">
-          목록으로
-        </Link>
-      </Message>
-    );
-  }
+  if (research.loading) return <Loading />;
+  if (research.error) return <ErrorMessage message={research.error} />;
+  if (!research.data) return <NotFoundPage message="요청하신 연구를 찾을 수 없습니다." />;
+  const r = research.data;
 
   return (
-    <div className="space-y-6">
-      <Link to="/research" className="text-sm text-brand-700 hover:underline">
-        ← 연구 목록
-      </Link>
+    <article className="mx-auto max-w-3xl">
+      <nav aria-label="이동 경로" className="mb-4 text-sm">
+        <Link to="/research" className="link">
+          ← 연구 목록
+        </Link>
+      </nav>
 
-      <article className="card p-5 sm:p-6">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <StatusBadge status={research.status} />
-          {research.tags.map((t) => (
-            <TagBadge key={t} tag={t} />
-          ))}
+      <header className="border-b border-slate-200 pb-6">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <StatusBadge status={r.status} />
+          <span>{r.year}년</span>
         </div>
-        <h1 className="mb-2 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{research.title}</h1>
-        <p className="mb-5 text-xs text-slate-500">
-          작성일 {formatDate(research.createdAt)}
-          {research.updatedAt !== research.createdAt && ` · 수정일 ${formatDate(research.updatedAt)}`}
-        </p>
+        <h1 className="mt-3 text-2xl font-bold leading-snug text-brand-900 sm:text-3xl">{r.title}</h1>
+        <p className="mt-3 text-slate-600">{r.summary}</p>
+        <div className="mt-4">
+          <TagList tags={r.tags} />
+        </div>
+      </header>
 
-        <h2 className="mb-1 text-sm font-semibold text-slate-700">요약</h2>
-        <p className="mb-6 whitespace-pre-wrap text-slate-700">{research.summary}</p>
+      <DetailSection title="초록">{r.abstract}</DetailSection>
+      <DetailSection title="연구 방법">{r.methods}</DetailSection>
+      <DetailSection title="결과 요약">
+        {r.results || <span className="text-slate-500">연구가 진행 중이며, 결과는 완료 후 공개됩니다.</span>}
+      </DetailSection>
 
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">자료 링크</h2>
-        <LinkList links={research.links} />
+      <section className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-brand-900">관련 자료</h2>
+        <LinkList links={r.links} />
+      </section>
 
-        {isAdmin && (
-          <div className="mt-6 flex gap-2 border-t border-slate-100 pt-4">
-            <Link to={`/research/${research.id}/edit`} className="btn-secondary">
-              수정
+      <section className="mt-10 rounded-lg border border-slate-200 bg-slate-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-brand-900">이 연구에 대한 토론</h2>
+          {canWrite && (
+            <Link to={`/discussions/new?researchId=${r.id}`} className="btn-primary btn-sm">
+              이 연구로 글쓰기
             </Link>
-            <button type="button" className="btn-danger" onClick={() => void handleDelete()}>
-              삭제
-            </button>
-          </div>
+          )}
+        </div>
+        {posts.loading && <Loading />}
+        {posts.data && posts.data.items.length === 0 && <p className="mt-3 text-sm text-slate-500">아직 연결된 토론 글이 없습니다.</p>}
+        {posts.data && posts.data.items.length > 0 && (
+          <ul className="mt-2 divide-y divide-slate-200">
+            {posts.data.items.map((p) => (
+              <PostListItem key={p.id} post={p} />
+            ))}
+          </ul>
         )}
-      </article>
+      </section>
+    </article>
+  );
+}
 
-      <CommentSection researchId={research.id} />
-    </div>
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 text-lg font-semibold text-brand-900">{title}</h2>
+      <p className="whitespace-pre-wrap leading-relaxed text-slate-700">{children}</p>
+    </section>
   );
 }

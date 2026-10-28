@@ -1,132 +1,119 @@
-// 연구 상세 화면의 토론(댓글) 영역: 목록 보기, 작성, 본인 댓글 삭제
-// 댓글은 이 화면을 열 때 한 번만 불러옵니다(실시간 구독 없음 → Firestore 읽기 횟수 절약).
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { formatDateTime } from '../lib/date';
-import { dataService } from '../services/dataService';
-import type { Comment } from '../services/types';
+// 글 상세 아래의 댓글 영역: 목록, 작성(로그인 시), 삭제(본인·관리자)
+import { useCallback, useState, type FormEvent } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { LIMITS } from '../config';
+import { usePagedList } from '../hooks/usePagedList';
+import { usePermissions } from '../hooks/usePermissions';
+import { discussionService } from '../services';
+import DateText from './DateText';
+import { EmptyState, ErrorMessage, Loading } from './StatusMessage';
 
-const MAX_LENGTH = 1000;
+export default function CommentSection({ postId }: { postId: string }) {
+  const { user, canWrite, canDelete } = usePermissions();
+  const location = useLocation();
+  const fetchPage = useCallback((cursor: string | null) => discussionService.listComments(postId, { cursor }), [postId]);
+  const { items, loading, error, hasMore, loadMore, reload } = usePagedList(fetchPage);
 
-export default function CommentSection({ researchId }: { researchId: string }) {
-  const { user, isAdmin } = useAuth();
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [text, setText] = useState('');
+  const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    dataService
-      .listComments(researchId)
-      .then((list) => active && setComments(list))
-      .catch(() => active && setError('댓글을 불러오지 못했습니다.'))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [researchId]);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmed = text.trim();
-    if (!user || !trimmed) return;
+    if (!user) return;
+    if (!content.trim()) {
+      setFormError('댓글 내용을 입력해 주세요.');
+      return;
+    }
     setSubmitting(true);
-    setError('');
+    setFormError(null);
     try {
-      const created = await dataService.addComment(researchId, trimmed, user);
-      setComments((prev) => [...prev, created]);
-      setText('');
-    } catch {
-      setError('댓글을 저장하지 못했습니다. 다시 시도해 주세요.');
+      await discussionService.addComment(postId, content, user);
+      setContent('');
+      reload();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '댓글을 저장하지 못했습니다.');
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDelete(commentId: string) {
-    if (!window.confirm('이 댓글을 삭제할까요?')) return;
+    if (!user || !window.confirm('이 댓글을 삭제할까요? 되돌릴 수 없습니다.')) return;
     try {
-      await dataService.deleteComment(researchId, commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-    } catch {
-      setError('댓글을 삭제하지 못했습니다.');
+      await discussionService.deleteComment(postId, commentId, user);
+      reload();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '삭제하지 못했습니다.');
     }
   }
 
   return (
-    <section className="card p-5" aria-labelledby="discussion-title">
-      <h2 id="discussion-title" className="mb-4 text-lg font-semibold text-slate-900">
-        토론 <span className="text-sm font-normal text-slate-500">({comments.length})</span>
+    <section aria-labelledby="comments-heading" className="mt-10">
+      <h2 id="comments-heading" className="mb-4 text-lg font-semibold text-brand-900">
+        댓글 <span className="text-accent-700">{items.length}</span>
       </h2>
 
-      {loading ? (
-        <p className="text-sm text-slate-500">댓글을 불러오는 중…</p>
-      ) : comments.length === 0 ? (
-        <p className="text-sm text-slate-500">아직 댓글이 없습니다. 첫 의견을 남겨 주세요.</p>
-      ) : (
-        <ul className="mb-4 divide-y divide-slate-100">
-          {comments.map((c) => {
-            // 본인 댓글은 삭제 가능. 교수(관리자)는 운영을 위해 모든 댓글 삭제 가능.
-            const canDelete = !!user && (user.uid === c.authorId || isAdmin);
-            return (
-              <li key={c.id} className="py-3">
-                <div className="mb-1 flex flex-wrap items-center gap-x-2 text-sm">
-                  <span className="font-semibold text-slate-800">{c.authorName}</span>
-                  <time className="text-xs text-slate-500" dateTime={c.createdAt}>
-                    {formatDateTime(c.createdAt)}
-                  </time>
-                  {canDelete && (
-                    <button
-                      type="button"
-                      className="ml-auto text-xs text-red-600 hover:underline"
-                      onClick={() => void handleDelete(c.id)}
-                    >
-                      삭제
-                    </button>
-                  )}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-slate-700">{c.text}</p>
-              </li>
-            );
-          })}
+      {error && <ErrorMessage message={error} />}
+      {!error && items.length === 0 && !loading && <EmptyState>아직 댓글이 없습니다. 첫 의견을 남겨 주세요.</EmptyState>}
+
+      {items.length > 0 && (
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+          {items.map((c) => (
+            <li key={c.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">{c.authorName}</span> · <DateText value={c.createdAt} />
+                </p>
+                {canDelete(c.authorId) && (
+                  <button type="button" className="btn-danger btn-sm" onClick={() => void handleDelete(c.id)}>
+                    삭제<span className="sr-only"> ({c.authorName}님의 댓글)</span>
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{c.content}</p>
+            </li>
+          ))}
         </ul>
       )}
+      {loading && <Loading />}
+      {hasMore && !loading && (
+        <button type="button" className="btn-secondary mt-3" onClick={loadMore}>
+          댓글 더 보기
+        </button>
+      )}
 
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-
-      {user ? (
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <label htmlFor="comment-text" className="sr-only">
-            댓글 입력
+      {canWrite ? (
+        <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 flex flex-col gap-2">
+          <label htmlFor="comment" className="label">
+            댓글 작성
           </label>
           <textarea
-            id="comment-text"
-            className="input min-h-[90px]"
-            placeholder="의견을 입력하세요. (환자 개인정보·미발표 원자료는 적지 마세요)"
-            maxLength={MAX_LENGTH}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+            id="comment"
+            className="input min-h-[96px]"
+            value={content}
+            maxLength={LIMITS.commentMax}
+            onChange={(e) => setContent(e.target.value)}
+            aria-describedby="comment-help"
           />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">
-              {text.length}/{MAX_LENGTH}
-            </span>
-            <button type="submit" className="btn-primary" disabled={submitting || !text.trim()}>
+          <p id="comment-help" className="text-xs text-slate-500">
+            {content.length}/{LIMITS.commentMax}자 · 환자 정보나 원자료는 적지 마세요.
+          </p>
+          {formError && <ErrorMessage message={formError} />}
+          <div>
+            <button type="submit" className="btn-primary" disabled={submitting}>
               {submitting ? '등록 중…' : '댓글 등록'}
             </button>
           </div>
         </form>
       ) : (
-        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-sm text-slate-500">
-          로그인 후 작성 가능합니다.{' '}
-          <Link to="/login" className="font-medium text-brand-700 underline">
-            로그인하기
+        <p className="mt-6 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          댓글을 쓰려면{' '}
+          <Link to="/login" state={{ from: location.pathname }} className="link font-medium">
+            로그인
           </Link>
-        </div>
+          해 주세요.
+        </p>
       )}
     </section>
   );
